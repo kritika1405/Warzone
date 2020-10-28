@@ -63,12 +63,20 @@ Gameplay Directions
 How to play the game?
 
 Run the Warzone.py file using python compiler or command line.
+
 Enter the size of the board you want to play on.
+
 You will have a view of the board (2D and 3D).
+
 You need to select the coordinates of one of your pieces that you want to move in the x,y format. 2D view can help you in that.
+
 You will then have a list of all the available moves that piece you selected can take.
+
 You need to select the index of the move you want to play. The indexing is zero based. i.e. 
 if you want to play the 5th move, enter 4.
+
 Your piece will move to the desired location.
+
 Repeat the same directions for the second player.
+
 Enjoy.
