@@ -453,7 +453,7 @@ def game_over(board):
 
 def playHuman(curUser):
     print("Your Turn ")
-    viewBoard(board)
+    # viewBoard(board)
     vm,ind = [],-1
     ch2 = input("Enter piece to get Moves: (in x,y coordinate format): ")
     while True:
@@ -481,8 +481,9 @@ def playHuman(curUser):
             ch3 =input("Please choose a valid move: ")
     movePiece(board, vm[ind])
 
-def main(ai):
+def main(ai,board):
     turn = 0
+    viewBoard(board)
     while not game_result(board):
         curUser = USER[1] if turn%2 == 0 else USER[0]
         if(curUser==USER[0]):
@@ -494,7 +495,8 @@ def main(ai):
                 print(" Tree nodes traversed by AI: ",treeNodesChecked)
         else:
             playHuman(curUser)
-            viewBoard(board)
+        
+        viewBoard(board)
         turn+=1
 
         print("\n")
@@ -524,10 +526,9 @@ if __name__ == "__main__":
     board,cnn_board = setupBoard(USER[0],USER[1],N)
     treeNodesChecked = 0
 
-    main(ai) 
+    main(ai,board) 
     
     print("---------------------------------------------")
     print("       ***   Thank you for playing   ***     ")
     print("---------------------------------------------")
     
-
