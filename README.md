@@ -66,7 +66,11 @@ Run the Warzone.py file using python compiler or command line.
 
 Enter the size of the board you want to play on.
 
-You will have a view of the board (2D and 3D).
+The game now has the AI to play with.
+
+Choose the AI to play. 2 options available for AI( Baseline AI and Tree-based AI ).
+
+You will have a view of the board (2D).
 
 You need to select the coordinates of one of your pieces that you want to move in the x,y format. 2D view can help you in that.
 
@@ -77,6 +81,6 @@ if you want to play the 5th move, enter 4.
 
 Your piece will move to the desired location.
 
-Repeat the same directions for the second player.
+The AI will play its own move accordingly.
 
 Enjoy.
