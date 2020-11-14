@@ -1,7 +1,7 @@
+from math import inf
 import numpy as np
-import torch as tr
 import re
-
+import time
 
 # Constants
 ROCK = "Rock"
@@ -10,40 +10,45 @@ PAWN = "Pawn"
 AI_PAWN = "AIPawn"
 JUMP = "Jump"
 MOVE = "Move"
-
+DEPTH = [3,3,3,3,3,3]
+OBSTACLES = [0,2,4,6,8,10]
 
 class Piece:
     status = None
     moves = None
     user = None
     jumps = [[-2,0],[0,2],[2,0],[0,-2]]
-    def __init__(self, status, moves, user):
+    
+    def __init__(self, status, moves, jumps, user):
         self.moves = moves
         self.user = user
+        self.jumps = jumps
 
 class Rock(Piece):
     status = ROCK
     def __init__(self):
-        Piece.__init__(self, self.status,None,None)
+        Piece.__init__(self, self.status,None,None,None)
         
 class Pawn(Piece):
     status = PAWN
     moves = [[-1,0],[-1,-1],[-1,1]]
+    jumps = [[-2,0],[0,2],[0,-2]]
     def __init__(self, user):
-        Piece.__init__(self, self.status, self.moves, user)
+        Piece.__init__(self, self.status, self.moves, self.jumps, user)
 
 class AIPawn(Piece):
     status = AI_PAWN
     moves = [[1,0],[1,-1],[1,1]]
+    jumps = [[0,2],[2,0],[0,-2]]
     def __init__(self, user):
-        Piece.__init__(self, self.status, self.moves, user)
+        Piece.__init__(self, self.status, self.moves, self.jumps, user)
 
 class King(Piece):
     status = KING
     moves = [[1,0],[0,1],[-1,0],[0,-1],[1,1],[1,-1],[-1,-1],[-1,1]]
     jumps = [[-1,0],[0,1],[1,0],[0,-1]]
     def __init__(self, user):
-        Piece.__init__(self, self.status, self.moves, user)
+        Piece.__init__(self, self.status, self.moves, self.jumps, user)
 
 class Gem:
     piece = None
@@ -73,30 +78,26 @@ class Move:
 def setupBoard(a,b,n):
     board = np.full((n,n),None)
     cnn_board = np.full((n,n,4),0)
-    game_over = False
-    winner = None
-    recentMoves = []
 
     if (n>8 or n<3 ):
         print("Please enter a valid board size(3-8): ")
         return
     
-#     Setup rocks
-    rock_indices_x,rock_indices_y = np.random.randint(1,N-1,2),np.random.randint(1,N-1,2)
+    #     Setup rocks
+    rock_indices_x,rock_indices_y = np.random.randint(1,N-1,OBSTACLES[N-3]),np.random.randint(1,N-1,OBSTACLES[N-3])
     
     for i in range(len(rock_indices_x)):
         board[rock_indices_x[i]][rock_indices_y[i]] = Gem(ROCK,None)
-#     print(rock_indices_x,rock_indices_y)
+    #     print(rock_indices_x,rock_indices_y)
 
-    
     board_setup = [[],[],[],[(0,n)],[(0,n)],[(0,n),(1,n-1)],[(0,n),(1,n-1)],[(0,n),(1,n-1),(2,n-2)],[(0,n),(1,n-1),(2,n-2)]]
-#     setup AI piece
+    #     setup AI piece
     for i in board_setup[n]:
         x,y=i
         for j in range(x,y):
             board[x][j] = Gem(AI_PAWN,a)
     
-#     setup User piece
+    #     setup User piece
     for i in board_setup[n]:
         x,y=i
         for j in range(x,y):
@@ -104,7 +105,7 @@ def setupBoard(a,b,n):
     
     return board,cnn_board
     
-def viewBoard():
+def viewBoard(board):
     view = np.full((N+1,N+1),"_")
     for i in range(1,N+1):
         for j in range(1,N+1):
@@ -112,55 +113,54 @@ def viewBoard():
                 if board[i-1][j-1].piece.status==KING:
                     view[i][j]=str(board[i-1][j-1].piece.user).upper()
                 elif board[i-1][j-1].piece.status==ROCK:
-                    view[i][j]='o'
+                    view[i][j]="o"
                 else:
                     view[i][j]=str(board[i-1][j-1].piece.user)
     view[0]=np.arange(-1,N)
     for i in range(-1,N):
         view[i+1][0]=i
-    view[0][0]='#'
+    view[0][0]="#"
     print(view)
-    print()
-    print("3D-view")
-    updateCnnBoard()
-    print(cnn_board)
+    # print("3D-view")
+    # updateCnnBoard()
+    # print(cnn_board)
     
 def resetBoard():
     return setupBoard(USER[0],USER[1],N),[]
 
 
 #ALL action functions
-def getMoves(location):
+def getMoves(board,location):
     x,y = location
     allmoves = []
-    if (not validSpot(x,y) or emptySpot(x,y) or isRock(x,y)):
-#         print("Invalid location")
+    if (not validSpot(x,y) or emptySpot(board,x,y) or isRock(board,x,y)):
+    #   print("Invalid location")
         return []
     currPiece = board[x][y].piece 
     if(board[x][y]!=None):
-#       print("Default ",moves," for ",piece)
+    #   print("Default ",moves," for ",piece)
         moves = currPiece.moves
         if currPiece.status=="King":
             for m in moves:
                 i,j=x+m[0],y+m[1]
-                while emptySpot(i,j):
+                while emptySpot(board,i,j):
                     allmoves.append((i,j)) 
                     i,j=i+m[0],j+m[1]
         else:
             for m in moves:
                 i,j=x+m[0],y+m[1]
                 flag = False
-#                 for empty block
+    #                 for empty block
                 if validSpot(i,j):
                     if board[i][j]==None:
                         flag = True
                         allmoves.append((i,j))
-#                 for filled block with user piece, then jump
+    #                 for filled block with user piece, then jump
                 if flag==False:
                     while validSpot(i,j) and board[i][j]!=None and board[i][j].piece.user==currPiece.user :
                         i+=m[0]
                         j+=m[1]
-                    if emptySpot(i,j):
+                    if emptySpot(board,i,j):
                         allmoves.append((i,j))                
     movelist = []
     for j in allmoves:
@@ -169,29 +169,29 @@ def getMoves(location):
     return movelist
 
 
-def getJumps(location):
+def getJumps(board,location):
     x,y = location
     jumps = []
-    if (not validSpot(x,y) or emptySpot(x,y) or isRock(x,y)):
-#         print("Invalid location")
+    if (not validSpot(x,y) or emptySpot(board,x,y) or isRock(board,x,y)):
+    #         print("Invalid location")
         return []
 
     currPiece = board[x][y].piece 
-    
+
     if currPiece.status=="King":
         for m in board[x][y].piece.jumps:
             i,j=x+m[0],y+m[1]
-            while emptySpot(i,j):
+            while emptySpot(board,i,j):
                 i,j=i+m[0],j+m[1]
             if validSpot(i,j) and board[i][j].piece.user!=currPiece.user:
                 i,j=i+m[0],j+m[1]
-                if emptySpot(i,j):
+                if emptySpot(board,i,j):
                     jumps.append((i,j))
-            
+
     else:    
         for m in board[x][y].piece.jumps:
             i,j=x+m[0],y+m[1]
-            if emptySpot(i,j):
+            if emptySpot(board,i,j):
                 if x==i and j>y and board[i][j-1]!=None and board[i][j-1].piece.user!=currPiece.user:
                     jumps.append((i,j))
                 elif x==i and j<y and board[i][j+1]!=None and board[i][j+1].piece.user!=currPiece.user:
@@ -203,14 +203,14 @@ def getJumps(location):
 
     jumplist = []
     for j in jumps:
-#         print(currPiece.user)
+    #         print(currPiece.user)
         jump = Move(location,j,JUMP,currPiece.user)
         jumplist.append(jump)
     return jumplist
-       
-    
-def movePiece(move):
-    recentMoves.insert(0,move)
+
+
+def movePiece(board, move):
+    # recentMoves.insert(0,move)
     fromlocation, tolocation = move.fromloc,move.toloc
     currPiece = board[fromlocation[0]][fromlocation[1]].piece
     board[tolocation[0]][tolocation[1]] = board[fromlocation[0]][fromlocation[1]]
@@ -226,7 +226,7 @@ def movePiece(move):
                 start = fromlocation[1]+1
                 end = tolocation[1]
             for y in range(start,end):
-                if ( isRock(x,y) ):
+                if ( isRock(board,x,y) ):
                     continue
                 else:
                     board[x][y]=None
@@ -240,27 +240,27 @@ def movePiece(move):
                 start = fromlocation[0]+1
                 end = tolocation[0]
             for x in range(start,end):
-                if ( isRock(x,y) ):
+                if ( isRock(board,x,y) ):
                     continue
                 else:
                     board[x][y]=None
     if currPiece.status!="King":
-        checkPromotion(move)
+        checkPromotion(board, move)
 
-
+        
 # helper functions
-def emptySpot(i,j):
+def emptySpot(board,i,j):
     if validSpot(i,j) and board[i][j]==None:
         return True
     return False
 
-def nonEmptySpot(i,j):
+def nonEmptySpot(board,i,j):
     if validSpot(i,j) and board[i][j]!=None:
         return True
     return False
 
-def isRock(i,j):
-    if nonEmptySpot(i,j) and board[i][j].piece.status==ROCK:
+def isRock(board,i,j):
+    if nonEmptySpot(board,i,j) and board[i][j].piece.status==ROCK:
         return True
     return False
 
@@ -269,15 +269,14 @@ def validSpot(i,j):
         return True
     return False
 
-def getValidMoves(location):
-    x,y = location
-    allmoves = getMoves(location)
-    jps = getJumps(location)
+def getValidMoves(board,location):
+    allmoves = getMoves(board,location)
+    jps = getJumps(board,location)
     allmoves.extend(jps)
     return allmoves
 
-def viewValidMoves(location,curUser):
-    allmoves = getValidMoves(location)
+def viewValidMoves(board,location,curUser):
+    allmoves = getValidMoves(board,location)
     if(allmoves!=[] and board[location[0],location[1]].piece.user!=curUser):
         return []
     temp = []
@@ -287,77 +286,38 @@ def viewValidMoves(location,curUser):
     print(temp)
     return allmoves
 
-def checkPromotion(move):
+def checkPromotion(board, move):
     if (move.toloc[0]==0 and move.user!=USER[0]) or ( move.toloc[0]==N-1 and move.user!=USER[1]):
-        print("Promotion move")
-        promoteToKing(move)
-
-def promoteToKing(move):
-    #print(" promoting to king ")
-    king = Gem("King",move.user) 
-    board[move.toloc[0]][move.toloc[1]]=king
+        king = Gem("King",move.user) 
+        board[move.toloc[0]][move.toloc[1]]=king
     
 def viewRecentMoves():
     for i in recentMoves:
         print("User: ",i.user," From: ",i.fromloc," To: ",i.toloc)
         
-def evaluate():
-    game_over,winner = False,None
-    x,y,X,Y=0,0,0,0
-    for i in range(N):
-        for j in range(N):
-            if(nonEmptySpot(i,j) and board[i][j].piece.status!=ROCK ):
-                if(board[i][j].piece.user==USER[0]):
-                    if PAWN in board[i][j].piece.status:
-                        x+=1 
-                    else:
-                        X+=1
-                else:
-                    if PAWN in board[i][j].piece.status:
-                        y+=1 
-                    else:
-                        Y+=1
-#     print("User 1 has ",x+X,"pieces left.","\nUser 2 has ",y+Y,"pieces left.")
-    
-    if (x+X)==0:
-        game_over=True
-        winner = USER[1]
-        print(USER[1]," has won the game.")    
-        return game_over,winner
-    
-    if (y+Y)==0 :
-        game_over=True
-        winner = USER[0]
-        print(USER[0]," has won the game.")
-        return game_over,winner
-        
-    a,b = evaluateIfUserHasMoves(USER[0]),evaluateIfUserHasMoves(USER[1])
-    if not a and not b:
-        game_over=True
-        winner = "Draw"
-        print("The game has ended in draw.")
-    elif not a:
-        game_over=True
-        winner = USER[1]
-        print(USER[1]," has won the game.")
-    elif not b:
-        game_over=True
-        winner = USER[0]
-        print(USER[0]," has won the game.")
-    
-    return game_over,winner
+def game_result(board):
+    game_status,winner = game_over(board)
+    if (game_status):
+        if (winner==""):
+            print("The game has ended in draw.")
+        elif (winner == USER[1]):
+            print(USER[1]," has won the game.")
+        elif  (winner == USER[0]):
+            print(USER[0]," has won the game.")
 
-def evaluateIfUserHasMoves(user):
+        print("Game Over !!!")
+        return game_status
+
+def checkIfUserHasMoves(board,user):
     flag = False
-    for i in range(N):
-        for j in range(N):
-            if(nonEmptySpot(i,j) and board[i][j].piece.user==user ):
-                if getValidMoves((i,j))!=[]:
-                    flag = True
-                    break
+    m = np.where(board!=None)
+    for i,j in zip(m[0],m[1]):
+        if(board[i][j].piece.user==user):
+            if getValidMoves(board,(i,j))!=[]:
+                flag = True
+                break
     return flag
 
-#Encoding for CNN
 space = [1,0,0,0]
 x_pawn = [0,1,0,0]
 y_pawn = [0,0,1,0]
@@ -382,68 +342,192 @@ def updateCnnBoard():
                     cnn_board[i][j]= x_pawn
             else:
                 cnn_board[i][j]= space
+                
+# AI baseline
+
+def baselineMoveMaker(user,board):
+    pieces = getAllPiecesOfUser(board, user)
+    moves = getAllMovesFromPieces(board,pieces)
+    x = int (np.random.randint(0,len(moves)))
+    m = moves[x]
+    movePiece(board, m)
+
+def getAllPiecesOfUser(board,user):
+    pieces = []
+    m = np.where(board!=None)
+    for i,j in zip(m[0],m[1]):
+        if(board[i][j].piece.user==user):
+            pieces.append((i,j))
+    return pieces
+    
+def getAllMovesFromPieces(board, pieces):
+    comb = []
+    for i in pieces:
+        moves=getValidMoves(board,i)
+        comb.extend(moves)
+    return comb
+    
+
+def callMinimax(board, treeNodesChecked, N):
+    board_copy = np.array(board,copy = True)
+    move = minimax(board_copy, DEPTH[N-3], +1, treeNodesChecked)
+    movePiece(board,move[0])
+    return move[3]
 
 
-turn = 0
-USER = ["x","y"] # AI : 1, User: 2
-recentMoves = []
-game_over = False
-winner = None
+def minimax(board, depth, player, treeNodesChecked):
+    if player == 1:
+        best = [None, -inf, False, treeNodesChecked]
+        user = USER[0]
+    else:
+        best = [None, +inf, False, treeNodesChecked]
+        user = USER[1]
+    
+    if game_over(board)[0]:
+        score = evaluateWinScore(board)
+        return [None, score, True, treeNodesChecked]
+    elif depth==0:
+        score = evaluateCurrentScoreBasedOnPieces(board)
+        return [None, score, False, treeNodesChecked]
+    
+    allPieces = getAllPiecesOfUser(board, user)
+    allMoves = getAllMovesFromPieces(board, allPieces)
+    
+    for i in allMoves:
+        treeNodesChecked+=1
+        board_copy = np.array(board,copy=True)
+        movePiece(board_copy,i)
+        score = minimax(board_copy, depth-1, -player, treeNodesChecked)
+        score[0] = i
 
-
-#Game Play
-
-if __name__ == "__main__":
-
-    print("Welcome to Warzone")
-    n = input("Please enter board size (3-8): ")
-
-    while True:
-        if n not in ["3","4","5","6","7","8"]:
-            n = input("Please enter a valid board size: ")
+        if player == +1:
+            if score[1] > best[1]:
+                best = score  # max value
         else:
-            N = int(n)
-            break
-    board,cnn_board = setupBoard(USER[0],USER[1],N)
+            if score[1] < best[1]:
+                best = score  # min value
+        
+    best[3]+= treeNodesChecked
+    return best
 
-    while True:
-        curUser = USER[1] if turn%2 == 0 else USER[0]
-        print("Turn of ",curUser)
-        turn+=1
-        viewBoard()
-        vm,ind = [],-1
-        ch2 = input("Enter piece to get Moves: (in x,y coordinate format): ")
-        while True:
-            if re.match("[0-9],[0-9]",ch2):
-                txt = ch2.split(",")
-                m = []
-                for i in txt:
-                    m.append(int(i))
-                vm = viewValidMoves(m,curUser)
-                if vm!=[]:
-                    break
+def evaluateWinScore(board):
+    result,winner = game_over(board)
+
+    if(result):
+        if (winner==USER[0]):
+           return +100 
+        elif (winner==USER[1]):
+            return -100
+        else:
+            return 0
+    else:
+        return 0
+
+def evaluateCurrentScoreBasedOnPieces(board):
+    x,y,X,Y=0,0,0,0
+    m = np.where(board!=None)
+    for i,j in zip(m[0],m[1]):
+        if(board[i][j].piece.status!=ROCK ):
+            if(board[i][j].piece.user==USER[0]):
+                if PAWN in board[i][j].piece.status:
+                    x+=1 
                 else:
-                    ch2 =input("Please choose a valid piece: ")
+                    X+=1
+            else:
+                if PAWN in board[i][j].piece.status:
+                    y+=1 
+                else:
+                    Y+=1
+    return (x + (3 * X)) - (y + (3 * Y))
+
+def game_over(board):
+    a,b = checkIfUserHasMoves(board,USER[0]),checkIfUserHasMoves(board,USER[1])
+    if not a and not b:
+        return True, ""
+    elif not a:
+        return True, USER[1]
+    elif not b:
+        return True, USER[0]
+    
+    return False,""
+
+def playHuman(curUser):
+    print("Your Turn ")
+    viewBoard(board)
+    vm,ind = [],-1
+    ch2 = input("Enter piece to get Moves: (in x,y coordinate format): ")
+    while True:
+        if re.match("[0-9],[0-9]",ch2):
+            txt = ch2.split(",")
+            m = []
+            for i in txt:
+                m.append(int(i))
+            vm = viewValidMoves(board,m,curUser)
+            if vm!=[]:
+                break
             else:
                 ch2 =input("Please choose a valid piece: ")
-        ch3 = input("Enter Move: (index of move you want, use 0th-indexing) ")
-        while True:
-            if re.match("[0-9]+",ch3):
-                ind = int(ch3)
-                if (ind>=0 and ind<len(vm)):
-                    break
-                else:
-                    ch3 =input("Please choose a valid move: ")
+        else:
+            ch2 =input("Please choose a valid piece: ")
+    ch3 = input("Enter Move: (index of move you want, use 0th-indexing) ")
+    while True:
+        if re.match("[0-9]+",ch3):
+            ind = int(ch3)
+            if (ind>=0 and ind<len(vm)):
+                break
             else:
                 ch3 =input("Please choose a valid move: ")
-        movePiece(vm[ind])
-        print()
-        print("Recent Moves Played ")
-        viewRecentMoves()
-        game_over, winner = evaluate()
-        
-        if game_over:
-            print("Game Over !!!")
-            break
+        else:
+            ch3 =input("Please choose a valid move: ")
+    movePiece(board, vm[ind])
+
+def main(ai):
+    turn = 0
+    while not game_result(board):
+        curUser = USER[1] if turn%2 == 0 else USER[0]
+        if(curUser==USER[0]):
+            if (ai=="1"):
+                baselineMoveMaker(USER[0],board)
+            else:
+                treeNodesChecked = 0
+                treeNodesChecked = callMinimax(board, treeNodesChecked, N)
+                print(" Tree nodes traversed by AI: ",treeNodesChecked)
+        else:
+            playHuman(curUser)
+            viewBoard(board)
+        turn+=1
+
         print("\n")
-        
+
+if __name__ == "__main__":
+    USER = ["x","y"] # AI : 1, User: 2
+    recentMoves = []
+    game_status = False
+    winner = None
+    print("---------------------------------------------")
+    print("        ***   Welcome to Warzone   ***       ")
+    print("---------------------------------------------")
+    print()
+    n = input("Please enter board size (3-7): ")
+
+    while n not in ["3","4","5","6","7","8"]:
+        n = input("Please enter a valid board size: ")
+    N = int(n)
+
+    print("1. Baseline AI (Easy and fun)")
+    print("2. Tree-Based AI (if you are looking for a challenge)")
+    print()
+    ai=input("Please enter the AI you want to play against(1,2)")
+    while ai not in ["1","2"]:
+        ai = input("Please enter a valid AI choice: ")
+    
+    board,cnn_board = setupBoard(USER[0],USER[1],N)
+    treeNodesChecked = 0
+
+    main(ai) 
+    
+    print("---------------------------------------------")
+    print("       ***   Thank you for playing   ***     ")
+    print("---------------------------------------------")
+    
+
