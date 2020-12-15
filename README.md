@@ -1,7 +1,7 @@
 # Warzone
 Two player game based on Dameo
 
-Types of Pieces: 2
+*Types of Pieces: 2*
 
 Pawn: Can move forward or diagonal, Jump one piece in an orthogonal
 manner(up, down, left, right)
@@ -20,7 +20,7 @@ Pawns or kings cannot occupy these spots but can jump over them.
 
 The User will move first and then the computer moves.
 
-Movement
+*Movement*
 
 Pawns can only move forward, either straight ahead or diagonally.
 
@@ -32,7 +32,7 @@ When a Pawn reaches the opposite end of the board, it is promoted to a king.
 The king can move in 8 directions to any available number
 of cells.
 
-Capturing 
+*Capturing *
 
 In these types of moves, user jumps over enemy piece removing them from the board.
 Capture can occur in orthogonal direction only. 
@@ -46,7 +46,7 @@ piece, so long as there is no other piece obstructing the path of the king.
 A jumped piece will be removed from the board at the end of the turn. 
 
 
-Results
+*Results*
 
 A player will lose if one of the following happens
 -> He has no pieces left on board.
@@ -58,7 +58,7 @@ A game is also considered a draw when the same position repeats three times by t
 same player (not necessarily consecutively).
 
 
-Gameplay Directions
+*Gameplay Directions*
 
 How to play the game?
 
@@ -83,4 +83,8 @@ Your piece will move to the desired location.
 
 The AI will play its own move accordingly.
 
-Enjoy.
+**Update**
+
+Now you have 3 AIs to play with. All AIs are competitive and challenging. Feel free to check all out.
+
+***Enjoy.***
